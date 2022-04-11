@@ -53,7 +53,7 @@ function buildDataSet(plot, present_index, ctx, label) {
 
 import {parseUTCDate, formatMonthYYYY, formatDay} from '../util/date'
 
-function dateFormatter(interval, longForm) {
+function dateFormatter(site, interval, longForm) {
   return function(isoDate, _index, _ticks) {
     let date = parseUTCDate(isoDate)
 
@@ -64,11 +64,13 @@ function dateFormatter(interval, longForm) {
     } else if (interval === 'hour') {
       const parts = isoDate.split(/[^0-9]/);
       date = new Date(parts[0],parts[1]-1,parts[2],parts[3],parts[4],parts[5])
-      var hours = date.getHours(); // Not sure why getUTCHours doesn't work here
-      var ampm = hours >= 12 ? 'pm' : 'am';
-      hours = hours % 12;
-      hours = hours ? hours : 12; // the hour '0' should be '12'
-      return hours + ampm;
+      date = new Date(date.valueOf() - site.offset * 1000 - date.getTimezoneOffset() * 60 * 1000);
+      const hours = date.getHours() + ':00';
+      if (longForm) {
+        return formatDay(date) + ' ' + hours;
+      } else {
+        return hours;
+      }
     } else if (interval === 'minute') {
       if (longForm) {
         const minutesAgo = Math.abs(isoDate)
@@ -91,7 +93,7 @@ class LineGraph extends React.Component {
   }
 
   regenerateChart() {
-    const {graphData} = this.props
+    const {graphData, site} = this.props
     this.ctx = document.getElementById("main-graph-canvas").getContext('2d');
     const label = this.props.query.filters.goal ? 'Converted visitors' : graphData.interval === 'minute' ? 'Pageviews' : 'Visitors'
     const dataSet = buildDataSet(graphData.plot, graphData.present_index, this.ctx, label)
@@ -121,7 +123,7 @@ class LineGraph extends React.Component {
             callbacks: {
               title: function(dataPoints) {
                 const data = dataPoints[0]
-                return dateFormatter(graphData.interval, true)(data.label)
+                return dateFormatter(site, graphData.interval, true)(data.label)
               },
               beforeBody: function() {
                 this.drawnLabels = {}
@@ -165,7 +167,7 @@ class LineGraph extends React.Component {
             grid: {display: false},
             ticks: {
               maxTicksLimit: 8,
-              callback: function(val, _index, _ticks) { return dateFormatter(graphData.interval)(this.getLabelForValue(val)) },
+              callback: function(val, _index, _ticks) { return dateFormatter(site, graphData.interval)(this.getLabelForValue(val)) },
               color: this.props.darkTheme ? 'rgb(243, 244, 246)' : undefined
             }
           }
