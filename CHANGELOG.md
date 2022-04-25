@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - The breakdown endpoint with the property query `property=event:goal` returns custom goal properties (within `props`)
 - Added IPv6 Ecto support (via the environment-variable `ECTO_IPV6`)
 - New filter type: `contains`, available for `page`, `entry_page`, `exit_page`
+- Add filter for custom property
 
 ### Fixed
 - UI fix where multi-line text in pills would not be underlined properly on small screens.
@@ -33,6 +34,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Cache the tracking script for 24 hours
 - Move `entry_page` and `exit_page` to be part of the `Page` filter group
+- Paginate /api/sites results and add a `View all` link to the site-switcher dropdown in the dashboard.
+- Remove the `+ Add Site` link to the site-switcher dropdown in the dashboard.
 
 ## v1.4.1
 
@@ -55,8 +58,9 @@ All notable changes to this project will be documented in this file.
 - Ability to invite users to sites with different roles plausible/analytics#1122
 - Option to configure a custom name for the script file
 - Add Conversion Rate to Top Sources, Top Pages Devices, Countries when filtered by a goal plausible/analytics#1299
+- Choice of metric for main-graph both in UI and API (visitors, pageviews, bounce_rate, visit_duration) plausible/analytics#1364
 - Add list view for countries report in dashboard plausible/analytics#1381
-- Add ability to view more than 100 custom goal properties plausible/analytics#1353
+- Add ability to view more than 100 custom goal properties plausible/analytics#1382
 
 ### Fixed
 - Fix weekly report time range plausible/analytics#951

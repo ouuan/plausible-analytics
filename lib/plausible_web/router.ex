@@ -41,17 +41,30 @@ defmodule PlausibleWeb.Router do
     plug PlausibleWeb.Firewall
   end
 
+  pipeline :flags do
+    plug :accepts, ["html"]
+    plug :put_secure_browser_headers
+    plug :fetch_session
+    plug PlausibleWeb.CRMAuthPlug
+  end
+
   if Mix.env() == :dev do
     forward "/sent-emails", Bamboo.SentEmailViewerPlug
   end
 
   use Kaffy.Routes, scope: "/crm", pipe_through: [PlausibleWeb.CRMAuthPlug]
 
+  scope path: "/flags" do
+    pipe_through :flags
+    forward "/", FunWithFlags.UI.Router, namespace: "flags"
+  end
+
   scope "/api/stats", PlausibleWeb.Api do
     pipe_through :internal_stats_api
 
     get "/:domain/current-visitors", StatsController, :current_visitors
     get "/:domain/main-graph", StatsController, :main_graph
+    get "/:domain/top-stats", StatsController, :top_stats
     get "/:domain/sources", StatsController, :sources
     get "/:domain/utm_mediums", StatsController, :utm_mediums
     get "/:domain/utm_sources", StatsController, :utm_sources

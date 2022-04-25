@@ -9,6 +9,13 @@ defmodule PlausibleWeb.Api.StatsController do
     site = conn.assigns[:site]
     query = Query.from(site, params) |> Filters.add_prefix()
 
+    selected_metric =
+      if !params["metric"] || params["metric"] == "conversions" do
+        "visitors"
+      else
+        params["metric"]
+      end
+
     timeseries_query =
       if query.period == "realtime" do
         %Query{query | period: "30m"}
@@ -16,11 +23,12 @@ defmodule PlausibleWeb.Api.StatsController do
         query
       end
 
-    timeseries = Task.async(fn -> Stats.timeseries(site, timeseries_query, [:visitors]) end)
-    {top_stats, sample_percent} = fetch_top_stats(site, query)
+    timeseries_result =
+      Stats.timeseries(site, timeseries_query, [String.to_existing_atom(selected_metric)])
 
-    timeseries_result = Task.await(timeseries)
-    plot = Enum.map(timeseries_result, fn row -> row[:visitors] end)
+    plot =
+      Enum.map(timeseries_result, fn row -> row[String.to_existing_atom(selected_metric)] || 0 end)
+
     labels = Enum.map(timeseries_result, fn row -> row[:date] end)
     present_index = present_index_for(site, query, labels)
 
@@ -28,6 +36,19 @@ defmodule PlausibleWeb.Api.StatsController do
       plot: plot,
       labels: labels,
       present_index: present_index,
+      interval: query.interval,
+      with_imported: query.include_imported,
+      imported_source: site.imported_data && site.imported_data.source
+    })
+  end
+
+  def top_stats(conn, params) do
+    site = conn.assigns[:site]
+    query = Query.from(site, params) |> Filters.add_prefix()
+
+    {top_stats, sample_percent} = fetch_top_stats(site, query)
+
+    json(conn, %{
       top_stats: top_stats,
       interval: query.interval,
       sample_percent: sample_percent,
@@ -92,7 +113,7 @@ defmodule PlausibleWeb.Api.StatsController do
   end
 
   defp fetch_top_stats(site, %Query{filters: %{"event:goal" => _goal}} = query) do
-    total_q = Query.remove_goal(query)
+    total_q = Query.remove_event_filters(query, [:goal, :props])
     prev_query = Query.shift_back(query, site)
     prev_total_query = Query.shift_back(total_q, site)
 
@@ -508,27 +529,28 @@ defmodule PlausibleWeb.Api.StatsController do
 
     total_visits_query =
       Query.put_filter(query, "event:page", {:member, pages})
-      |> Query.put_filter("event:goal", nil)
       |> Query.put_filter("event:name", {:is, "pageview"})
-      |> Query.put_filter("visit:goal", query.filters["event:goal"])
-      |> Query.put_filter("visit:page", query.filters["event:page"])
-
-    total_pageviews =
-      Stats.breakdown(site, total_visits_query, "event:page", [:pageviews], {limit, 1})
 
     exit_pages =
-      Enum.map(exit_pages, fn exit_page ->
-        exit_rate =
-          case Enum.find(total_pageviews, &(&1[:page] == exit_page[:name])) do
-            %{pageviews: pageviews} ->
-              Float.floor(exit_page[:total_exits] / pageviews * 100)
+      if !Query.has_event_filters?(query) do
+        total_pageviews =
+          Stats.breakdown(site, total_visits_query, "event:page", [:pageviews], {limit, 1})
 
-            nil ->
-              nil
-          end
+        Enum.map(exit_pages, fn exit_page ->
+          exit_rate =
+            case Enum.find(total_pageviews, &(&1[:page] == exit_page[:name])) do
+              %{pageviews: pageviews} ->
+                Float.floor(exit_page[:total_exits] / pageviews * 100)
 
-        Map.put(exit_page, :exit_rate, exit_rate)
-      end)
+              nil ->
+                nil
+            end
+
+          Map.put(exit_page, :exit_rate, exit_rate)
+        end)
+      else
+        exit_pages
+      end
 
     if params["csv"] do
       if Map.has_key?(query.filters, "event:goal") do
@@ -800,7 +822,7 @@ defmodule PlausibleWeb.Api.StatsController do
         query
       end
 
-    total_q = Query.remove_goal(query)
+    total_q = Query.remove_event_filters(query, [:goal, :props])
 
     %{visitors: %{value: total_visitors}} = Stats.aggregate(site, total_q, [:visitors])
 
@@ -836,7 +858,7 @@ defmodule PlausibleWeb.Api.StatsController do
     query = Query.from(site, params) |> Filters.add_prefix()
     pagination = parse_pagination(params)
 
-    total_q = Query.remove_goal(query)
+    total_q = Query.remove_event_filters(query, [:goal, :props])
 
     %{:visitors => %{value: unique_visitors}} = Stats.aggregate(site, total_q, [:visitors])
 
@@ -964,7 +986,7 @@ defmodule PlausibleWeb.Api.StatsController do
       query_without_goal =
         query
         |> Query.put_filter(filter_name, {:member, items})
-        |> Query.remove_goal()
+        |> Query.remove_event_filters([:goal, :props])
 
       res_without_goal =
         Stats.breakdown(site, query_without_goal, filter_name, [:visitors], pagination)
