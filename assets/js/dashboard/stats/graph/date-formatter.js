@@ -128,6 +128,10 @@ export default function dateFormatter({ interval, longForm, period, isPeriodFull
   const displayMode = longForm ? 'long' : 'short'
   const options = { period: period, interval: interval, isBucketPartial: !isPeriodFull, shouldShowYear }
   return function (isoDate, _index, _ticks) {
-    return factory[interval][displayMode](isoDate, options)
+    const date = new Date(isoDate);
+    return factory[interval][displayMode](
+      new Date(date.valueOf() - 2 * date.getTimezoneOffset() * 60 * 1000).toISOString().replace('T', ' ').replace('.000Z', ''),
+      options,
+    )
   }
 }
